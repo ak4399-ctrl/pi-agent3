@@ -1,0 +1,16 @@
+flowchart TB
+    A0["A 阶段结束：Pi 已读到 handoff.txt 并回答了启动命令<br/>会话文件中保存了：用户指令 + assistant toolCall + tool result + 最终回答"]
+
+    A0 --> L["左：恢复旧会话<br/>node .\packages\coding-agent\dist\cli.js -c"]
+    A0 --> R["右：新建会话<br/>/new（或直接启动，不带 -c）"]
+
+    L --> L1["SessionManager 读取该目录最近的会话文件<br/>session-manager.ts：parseSessionEntries / buildSessionContext"]
+    L1 --> L2["恢复历史消息到 currentContext.messages<br/>（含 A 阶段读到的 handoff.txt 内容）"]
+    L2 --> L3["用户输入：请起草 README 启动说明"]
+    L3 --> L4["请求模型时 messages = 恢复的历史 + 本次提问"]
+    L4 --> L5["模型能看到 A 阶段的启动命令<br/>实际回答含 npm run demo -- --profile river-ZBH-202430154156<br/>未调用工具（1 次模型请求）"]
+
+    R --> R1["创建新会话，聊天历史为空<br/>（新 session 文件，只有 system prompt）"]
+    R1 --> R2["用户输入：完全相同的提问"]
+    R2 --> R3["请求模型时 messages = system + 本次提问"]
+    R3 --> R4["历史里没有 A 阶段的命令<br/>模型回答“没有交接单信息，无法起草”<br/>未调用工具（1 次模型请求）"]

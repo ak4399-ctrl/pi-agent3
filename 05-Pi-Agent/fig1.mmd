@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant I as 交互与会话层<br/>interactive-mode.ts / agent-session.ts
+    participant A as Agent 执行层<br/>agent.ts / agent-loop.ts
+    participant M as 模型请求层<br/>pi-ai（provider 适配器）
+    participant R as read 工具<br/>tools/read.ts
+
+    U->>I: 输入指令并回车<br/>defaultEditor.onSubmit(text)  (interactive-mode.ts:3325)
+    I->>I: 命令分流后 session.prompt(text)  (agent-session.ts:2175)
+    I->>A: agent.prompt(messages) → runPromptMessages  (agent.ts:382)
+
+    Note over A,M: 第 1 次模型请求
+    A->>M: streamFunction(config.model, llmContext, {apiKey, signal})
+    M->>M: 适配器组装 HTTPS 请求
+    M-->>A: 流式增量（assistant 决定调用 read）
+    Note right of M: 远端模型服务（deepseek-v4-pro）<br/>请求在适配器内发出，响应以流的形式返回
+
+    A->>R: executeToolCalls() → read({ path: "handoff.txt" })
+    R->>R: defaultReadOperations.createReadStream<br/>open(path) + handle.createReadStream()，按行截断到 DEFAULT_MAX_BYTES/LINES
+    R-->>A: tool result（文件文本）
+    A->>A: currentContext.messages.push(result)<br/>日志：[P4] 工具结果已加入上下文
+
+    Note over A,M: 第 2 次模型请求（上下文多了 tool result）
+    A->>M: streamFunction(...) 同一函数，messages 更长
+    M-->>A: 最终回答（assistant message）
+
+    A-->>I: 事件流 message_update / message_end  (interactive-mode.ts:3649 / 3685)
+    I-->>U: 终端渲染回复（streamingComponent.updateContent）
